@@ -22,7 +22,7 @@ pygame.display.set_caption("Стрелялка")
 # images
 bg = pygame.image.load(path.join(img_dir, 'space.jpg')).convert()
 bg = pygame.transform.scale(bg, (screen))
-my_sprite = pygame.image.load(path.join(img_dir, 'artem.png')).convert_alpha()
+my_sprite = pygame.image.load(path.join(img_dir, 'artem_space.png')).convert_alpha()
 ship = pygame.image.load(path.join(img_dir, 'ship.png')).convert_alpha()
 ship_center = (random.randint(0, 700), random.randint(0, 500))
 
