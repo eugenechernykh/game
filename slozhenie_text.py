@@ -18,6 +18,10 @@ LoadKeyboardLayout("00000419", 1)
 game_dir = path.dirname(__file__)
 img_dir = path.join(game_dir, 'img')
 
+# FPS to decrease load
+FPS = 30
+clock = pygame.time.Clock()
+
 # main_screen
 WIDTH = 1200
 HEIGHT = 900
@@ -41,7 +45,7 @@ bg = pygame.image.load(path.join(img_dir, 'board1.jpg')).convert()
 bg = pygame.transform.smoothscale(bg, (WIDTH, HEIGHT))
 
 
-# simplify image loading and resizing
+# Simplify image loading and resizing
 def load_hero(file):
     if search(r'png', file):
         image = pygame.image.load(path.join(img_dir, file)).convert_alpha()
@@ -89,7 +93,7 @@ items = [Items('яблоко', load_item('apple.jpg'), 'жёлтое'),
          Items('машина', load_item('car.jpg'), 'жёлтая')]
 
 
-# show text on a surface
+# Show text on a surface
 def print_text(message, x, y, font_color=WHITE, font_type='Comic Sans MS', font_size=40):
     if isinstance(message, int):
         message = str(message)  # converting int in str
@@ -99,8 +103,8 @@ def print_text(message, x, y, font_color=WHITE, font_type='Comic Sans MS', font_
     return text.get_width()
 
 
-# draw text and images as one line
-def drawSentence(sentence, x, y):
+# Draw text and images as one line
+def drawSentence(sentence: tuple, x: int, y: int) -> None:
     for n in sentence:
         if isinstance(n, tuple):
             message, color = n
@@ -112,22 +116,31 @@ def drawSentence(sentence, x, y):
             x += print_text(n, x, y) + W_STEP  # indent after drawing the text
 
 
-# show amount of solved tasks
+# Show amount of solved tasks
 def drawCount():
     drawSentence(('Привет! Ты правильно решил', (solved, RED),
                   'задач{}.'.format('у' if solved == 1 else ('и' if 1 < solved < 5 else ''))), 7 * W_STEP, H_STEP)
 
 
-# show success rate
+# Show success rate
 def drawStatistics():
     drawSentence(('Успешность:', '0' if mistakes == 0 and solved == 0 else 100 * solved // (solved + mistakes), '%'),
                  26 * W_STEP, HEIGHT - 4 * H_STEP)
 
 
-# declension for names
-def change(word, number):
+# Declension for names
+def change(word: str, number: int) -> str:
     morph = pymorphy2.MorphAnalyzer()
     return morph.parse(word)[0].make_agree_with_number(number)[0]
+
+
+# Past time for verb in accordance with gender
+def verb_change(verb: str, noun: str, num: int) -> str:
+    morph = pymorphy2.MorphAnalyzer()
+    if num == 1:
+        return morph.parse(verb)[0].inflect({'past', morph.parse(noun)[0].tag.gender})[0]
+    if num > 1:
+        return morph.parse(verb)[0].inflect({'past', 'neut'})[0]
 
 
 class Task:
@@ -159,9 +172,11 @@ class Task:
     def drawCondition(self):
         # show task's condition
         drawSentence(
-            ('У', self.hero1, 'был{}'.format('o' if self.count1 != 1 else ''), self.count1, self.item1, '.'), start, line)
-        drawSentence(('А у', self.hero2, 'был{}'.format('o' if self.count2 != 1 else ''), self.count2, self.item2, '.'),
-                     start - W_STEP, 2 * line)
+            ('У', self.hero1, verb_change('быть', self.item.name, self.count1), self.count1, self.item1, '.'), start,
+            line)
+        drawSentence(
+            ('А у', self.hero2, verb_change('быть', self.item.name, self.count2), self.count2, self.item2, '.'),
+            start - W_STEP, 2 * line)
         # answer box
         drawSentence(('Ответ:', (self.input_text, BLUE)), start - 3 * W_STEP, 4 * line)
         # mistakes box
@@ -241,6 +256,8 @@ class Task:
 def game_cycle():
     global mistakes
 
+    clock.tick(FPS)
+
     need_input = True
     completed = False
     #    task = Task(True)
@@ -249,7 +266,7 @@ def game_cycle():
 
     while not completed:
         task.drawWindow()
-
+        print('TIK')
         for event in pygame.event.get():
             if event.type == pygame.QUIT:
                 pygame.quit()

@@ -15,12 +15,7 @@ LoadKeyboardLayout("00000419", 1)
 # directories initialisation
 game_dir = path.dirname(__file__)
 img_dir = path.join(game_dir, 'img')
-# sound_dir = path.join(game_dir, 'sound')
-'''
-#set clock block for future
-FPS = 30
-clock = pygame.time.Clock()
-'''
+
 # main_screen
 WIDTH = 1200
 HEIGHT = 900
@@ -32,6 +27,7 @@ WHITE = (255, 255, 255)
 BLACK = (0, 0, 0)
 RED = (255, 0, 0)
 GREEN = (0, 255, 0)
+
 # images
 bg = pygame.image.load(path.join(img_dir, 'board1.jpg')).convert()
 bg = pygame.transform.smoothscale(bg, (WIDTH, HEIGHT))
@@ -83,7 +79,7 @@ def drawCount():
                    3 * WIDTH // 5 + 65, HEIGHT // 100)
 
 
-# show mistakes and success rate
+# show success rate
 def drawStatistics():
     print_text('Успешность:', WIDTH - WIDTH // 3 + 20, HEIGHT - HEIGHT // 8)
     if mistakes == 0 and solved == 0:
