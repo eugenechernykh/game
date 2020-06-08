@@ -23,15 +23,12 @@ FPS = 30
 clock = pygame.time.Clock()
 
 # main_screen
-WIDTH = 1200
-HEIGHT = 900
-W_STEP = WIDTH // 40
-H_STEP = HEIGHT // 40
-start = 10 * W_STEP
-line = 8 * H_STEP
+WIDTH, HEIGHT = 1200, 900
+W_STEP, H_STEP = WIDTH // 40, HEIGHT // 40
+start, line = 10 * W_STEP, 8 * H_STEP
 
 win = pygame.display.set_mode((WIDTH, HEIGHT))
-pygame.display.set_caption("Сложение")
+pygame.display.set_caption("Истории в картинках")
 
 # set colors
 WHITE = (255, 255, 255)
@@ -39,8 +36,6 @@ BLACK = (0, 0, 0)
 RED = (255, 0, 0)
 GREEN = (0, 255, 0)
 BLUE = (0, 204, 255)
-
-# images
 
 
 # Simplify image loading and resizing
@@ -96,7 +91,8 @@ images = [Images(load_image('1_man_eat.jpg', image_scale), 'Дядя ест на
           Images(load_image('1_man_knock.jpg', image_scale),'Дядя стучит в комнате.', ('Кто на картинке?', 'дядя'), ('Что дядя делает?', 'стучит'), ('Что у дяди в руках?', 'молоток'), ('Где дядя?', 'в комнате'))
           ]
 
-#background
+
+# Background
 bg = load_image('board1.jpg', (WIDTH, HEIGHT))
 
 # Buttons
@@ -204,11 +200,10 @@ class Pictures:
             win.blit(self.picture, self.rect)
         # Question box
         print_text(self.question, WIDTH // 2, 3.5 * line, center='yes')
-
-        # answer box
+        # Answer box
         drawSentence(('Ответ:', (self.input_text, BLUE)), start - 3 * W_STEP,
                      4 * line)
-        # mistakes box
+        # Mistakes box
         drawSentence(('Ошибок:', (mistakes, RED)), 26 * W_STEP, 4 * line)
 
     def checkAnswer(self, answer):
@@ -244,7 +239,7 @@ class Task:
             self.item_current = self.item.pic
 
     def drawCondition(self):
-        # show task's condition
+        # Show task's condition
         drawSentence(
             ('У', self.hero1, verb_change('быть', self.item.name, self.count1),
              self.count1, self.item1, '.'), start,
@@ -254,10 +249,10 @@ class Task:
              verb_change('быть', self.item.name, self.count2), self.count2,
              self.item2, '.'),
             start - W_STEP, 2 * line)
-        # answer box
+        # Answer box
         drawSentence(('Ответ:', (self.input_text, BLUE)), start - 3 * W_STEP,
                      4 * line)
-        # mistakes box
+        # Mistakes box
         drawSentence(('Ошибок:', (mistakes, RED)), 26 * W_STEP, 4 * line)
 
     def drawQuestion(self, num):
@@ -287,37 +282,37 @@ class Task:
             drawSentence(('Что меньше', self.count1, 'или', self.count2, '?'),
                          start, 3 * line)
 
-    # check the answer in accordance with the task question
+    # Check the answer in accordance with the task question
     def checkAnswer(self, num, answer):
-        if num == 1:  # how much together?
+        if num == 1:  # How much together?
             return answer == str(self.count1 + self.count2)
-        if num == 2:  # which number is greater?
+        if num == 2:  # Which number is greater?
             return answer == str(
                 self.count1 if self.count1 >= self.count2 else self.count2)
-        if num == 3:  # who has more?
+        if num == 3:  # Who has more?
             if self.count1 > self.count2:
                 return answer == 'у ' + self.heroes[0].name
             elif self.count1 == self.count2:
                 return answer == 'одинаково'
             else:
                 return answer == 'у ' + self.heroes[1].name
-        if num == 4:  # who has current_count of item?
+        if num == 4:  # Who has current_count of item?
             if self.count1 < self.count2:
                 return answer == 'у ' + self.heroes[0].name
             elif self.count1 == self.count2:
                 return answer == 'одинаково'
             else:
                 return answer == 'у ' + self.heroes[1].name
-        if num == 5:  # which color?
+        if num == 5:  # Which color?
             return answer == self.heroes[0].color
-        if num == 6:  # who has less?
+        if num == 6:  # Who has less?
             if self.count1 == self.count2:
                 return answer == 'одинаково'
             elif self.current_count == self.count1:
                 return answer == 'у ' + self.heroes[0].name
             else:
                 return answer == 'у ' + self.heroes[1].name
-        if num == 7:  # which number is lower?
+        if num == 7:  # Which number is lower?
             return answer == str(
                 self.count1 if self.count1 <= self.count2 else self.count2)
 
@@ -350,7 +345,6 @@ def title_scene():
 
     run = True
     while run:
-
         for event in pygame.event.get():
             pos = pygame.mouse.get_pos()
             if event.type == pygame.QUIT:
@@ -404,7 +398,7 @@ def pictures_scene():
                             pics.text_only = False
                         else:
                             pics.text_only = True
-                    # process TAB key for showing stats
+                    # Processing TAB key for showing stats
                     if event.key == pygame.K_TAB:
                         tab_pressed = True
                         while tab_pressed:
@@ -412,7 +406,7 @@ def pictures_scene():
                             for e in pygame.event.get():
                                 if e.type == pygame.KEYUP and e.key == pygame.K_TAB:
                                     tab_pressed = False
-                    # checking the answer
+                    # Checking the answer
                     elif event.key == pygame.K_RETURN:
                         answer = pics.input_text
                         pics.input_text = ''
@@ -421,7 +415,7 @@ def pictures_scene():
                     elif len(pics.input_text) < 20:
                         pics.input_text += event.unicode
 
-            # next task or mistakes calculation
+            # Next task or mistakes calculation
             if answer != '':
                 completed = pics.checkAnswer(answer)
                 answer = ''
@@ -430,7 +424,6 @@ def pictures_scene():
 
             pics.drawQuestion()
             drawCount()
-
             pygame.display.update()
         solved += 1
 
@@ -449,8 +442,6 @@ def tasks_scene():
         answer = ''
 
         while not completed:
-            task.drawWindow()
-
             for event in pygame.event.get():
                 if event.type == pygame.QUIT:
                     pygame.quit()
@@ -458,7 +449,7 @@ def tasks_scene():
                 if event.type == pygame.KEYDOWN:
                     if event.key == pygame.K_ESCAPE:
                         return
-                # process TAB key for showing stats
+                # Processing TAB key for showing stats
                     if event.key == pygame.K_TAB:
                         tab_pressed = True
                         while tab_pressed:
@@ -466,7 +457,7 @@ def tasks_scene():
                             for e in pygame.event.get():
                                 if e.type == pygame.KEYUP and e.key == pygame.K_TAB:
                                     tab_pressed = False
-                    # checking the answer
+                    # Checking the answer
                     elif event.key == pygame.K_RETURN:
                         answer = task.input_text
                         task.input_text = ''
@@ -474,18 +465,18 @@ def tasks_scene():
                         task.input_text = task.input_text[:-1]
                     elif len(task.input_text) < 20:
                         task.input_text += event.unicode
-            # next task or mistakes calculation
+            # Next task or mistakes calculation
             if answer != '':
                 completed = task.checkAnswer(task.question, answer)
                 answer = ''
                 if not completed:
                     mistakes += 1
-
+            task.drawWindow()
             pygame.display.update()
         solved += 1
 
 
-# The main part of the game
+# Finally the game starts here
 solved = 0
 mistakes = 0
 game = True
