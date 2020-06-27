@@ -1,15 +1,15 @@
+import configparser
 import random
 from collections import namedtuple
 from os import path
 from re import search
 from sys import exit
 
+import MySQLdb
 import pygame
 import pymorphy2
-from win32api import LoadKeyboardLayout
-import configparser
-import MySQLdb
 from DBUtils.PooledDB import PooledDB
+from win32api import LoadKeyboardLayout
 
 pygame.init()
 pygame.font.init()
@@ -24,7 +24,7 @@ data_dir = path.join(game_dir, 'data')
 
 # DB config load and opening the connection
 config = configparser.ConfigParser()
-config.read('C:\\Users\echernykh.ECHERNYKH\mysql\config.ini')
+config.read('C:/Users/echernykh.ECHERNYKH/mysql/config.ini')
 pool = PooledDB(creator=MySQLdb,
                 mincached=1,
                 maxcached=4,
@@ -36,13 +36,13 @@ pool = PooledDB(creator=MySQLdb,
 db = pool.connection()
 
 # FPS to decrease load
-FPS = 30
+FPS = 10
 clock = pygame.time.Clock()
 
 # The main screen
 WIDTH, HEIGHT = 1600, 900
 W_STEP, H_STEP = WIDTH // 40, HEIGHT // 40
-start, line = 10 * W_STEP, 8 * H_STEP
+START, LINE = 10 * W_STEP, 8 * H_STEP
 
 win = pygame.display.set_mode((WIDTH, HEIGHT))
 pygame.display.set_caption("Истории в картинках")
@@ -125,7 +125,6 @@ heroes = [
 item_scale = (120, 120)
 Items = namedtuple("Item", "name pic color")
 items = [Items('яблоко', load_image('apple.jpg', item_scale), 'жёлтое'),
-         #         Items('банан', load_image('banana.jpg', item_scale), 'жёлтый'),
          Items('банан', load_image('banana2.png', item_scale), 'жёлтый'),
          Items('клубника', load_image('strawberry.png', item_scale),
                'красного  '),
@@ -168,30 +167,25 @@ def load_files(text_file_name, scale):
 # Background
 bg = load_image('board1.jpg', (WIDTH, HEIGHT))
 
-# Buttons
-pictures = load_image('button_pictures.png')
-pictures_pressed = load_image('button_pictures_isOver.png')
-bt_tasks = load_image('button_tasks.png')
-bt_tasks_pressed = load_image('button_tasks_isOver.png')
 
-
-# Show text on a surface
-def print_text(message, x, y, font_color=WHITE, font_type='Comic Sans MS',
-               font_size=40, center='no'):
+def print_text(
+        message, x, y, font_color=WHITE, font_type='Comic Sans MS',
+        font_size=40, center='no'):
     if isinstance(message, int):
-        message = str(message)  # converting int to str
+        message = str(message)  # converting number to string
     font_type = pygame.font.SysFont(font_type, font_size)
-    if message.count('.') > 1:  # splitting several sentences
+    # splitting several sentences is required for picture descriptions
+    if message.count('.') > 1:
         splitted_message = message.split('.')
         splitted_message.pop()  # removing the last empty element in the list
         for i in range(len(splitted_message)):
             text = font_type.render(splitted_message[i] + '.', True,
                                     font_color)
             if center == 'yes':
-                text_rect = text.get_rect(center=(x, y + i * 50))
+                text_rect = text.get_rect(center=(x, y + i*50))
                 win.blit(text, text_rect)
             else:
-                win.blit(text, (x, y + i * 50))
+                win.blit(text, (x, y + i*50))
         return
     else:
         text = font_type.render(message, True, font_color)
@@ -204,8 +198,8 @@ def print_text(message, x, y, font_color=WHITE, font_type='Comic Sans MS',
     return text.get_width()
 
 
-# Draw text and images as one line
 def drawSentence(sentence: tuple, x: int, y: int) -> None:
+    # Draw text and images as one line
     for n in sentence:
         if isinstance(n, tuple):
             message, color = n
@@ -219,31 +213,42 @@ def drawSentence(sentence: tuple, x: int, y: int) -> None:
             x += print_text(n, x, y) + W_STEP  # indent after drawing the text
 
 
-# Show amount of solved tasks
-def drawCount():
+def drawSolvedBox():
     drawSentence(('Привет! Ты правильно решил', (solved, RED),
-                  change('задача', solved, case='accs') + '.'), 7 * W_STEP,
+                  agree_noun_with_number('задача', solved, case='accs') + '.'), 7 * W_STEP,
                  H_STEP)
 
 
-# Show success rate
+def drawMistakesBox():
+    drawSentence(('Ошибок:', (mistakes, RED)), 26 * W_STEP, 4 * LINE)
+
+
 def drawStatistics():
+    # Show success rate
     drawSentence(('Успешность:',
                   '0' if mistakes == 0 and solved == 0 else 100 * solved // (
                           solved + mistakes), '%'),
-                 26 * W_STEP, HEIGHT - 4 * H_STEP)
+                 26 * W_STEP, HEIGHT - 4*H_STEP)
     pygame.display.update()
 
 
-# Declension for names
-def change(word: str, number: int, case='nomn') -> str:
+def drawAnswerBox(input_text):
+    drawSentence(('Ответ:', (input_text, BLUE)), START - 3*W_STEP,
+                 4 * LINE)
+
+
+def agree_noun_with_number(word: str, number: int, case='nomn') -> str:
+    # Declension for names
     morph = pymorphy2.MorphAnalyzer()
     return morph.parse(word)[0].inflect({case}).make_agree_with_number(number)[
         0]
 
+def noun_declension(noun, case='nomn'):
+    morph = pymorphy2.MorphAnalyzer()
+    return morph.parse(noun)[0].inflect({case})[0]
 
-# Past time for verb in accordance with gender
-def verb_change(verb: str, noun: str, num: int) -> str:
+def verb_change(verb: str, noun: str = 'раз', num: int = 1) -> str:
+    # Past time for verb in accordance with a noun gender
     morph = pymorphy2.MorphAnalyzer()
     if num == 1:
         return morph.parse(verb)[0].inflect(
@@ -257,89 +262,35 @@ def congratulations():
     message = random.choice(('ВЕЛИКОЛЕПНО !!!', 'ЗДОРОВО !!!',
                              'ЗАМЕЧАТЕЛЬНО !!!', 'ОТЛИЧНО !!!', 'МОЛОДЕЦ !!!',
                              'ПРАВИЛЬНО !!!', 'УМНИЦА !!!'))
-    print_text(message, WIDTH // 2, 2 * line, center='yes', font_size=90)
+    print_text(message, WIDTH // 2, 2 * LINE, center='yes', font_size=90)
     pygame.display.update()
     pygame.time.delay(300)
 
 
 class Button:
-    def __init__(self, x, y, image):
+    def __init__(self, x, y, image, pressed):
         self.image = image
+        self.original = image
+        self.pressed = pressed
         self.rect = self.image.get_rect(center=(x, y))
 
-    def draw_button(self):
+    def isOver(self, mouse_position: tuple) -> bool:
+        # mouse_position is a tuple of (x,y) coordinates
+        return self.rect.x < mouse_position[0] < self.rect.x + self.rect.width \
+               and self.rect.y < mouse_position[
+                   1] < self.rect.y + self.rect.height
+
+    def changeOnOver(self, pos):
+        # Changing the button image once the mouse is over it
+        self.image = self.pressed if self.isOver(pos) else self.original
+
+    def drawButton(self):
         win.blit(self.image, self.rect)
-
-    def isOver(self, pos):
-        # Pos is the mouse position or a tuple of (x,y) coordinates
-        if self.rect.x < pos[0] < self.rect.x + self.rect.width:
-            if self.rect.y < pos[1] < self.rect.y + self.rect.height:
-                return True
-
-        return False
-
-
-class PicturesOld:
-    def __init__(self, text_only=False):
-        self.image = random.choice(images)
-        self.text_only = text_only
-        self.text = self.image.text
-        self.picture = self.image.pic
-        self.rect = self.picture.get_rect(center=(WIDTH // 2, HEIGHT // 3))
-        self.dict = self.image.questions
-        self.question = random.choice(list(self.dict.keys()))
-        while self.question == '':
-            self.question = random.choice(list(self.dict.keys()))
-        self.answer = self.dict[self.question]
-        self.input_text = ''
-
-    def drawQuestion(self):
-        win.blit(bg, (0, 0))
-        if self.text_only:
-            print_text(self.text, WIDTH // 2, 2 * line, center='yes')
-        else:
-            win.blit(self.picture, self.rect)
-        # Question box
-        print_text(self.question, WIDTH // 2, 3.5 * line, center='yes')
-        # Answer box
-        drawSentence(('Ответ:', (self.input_text, BLUE)), start - 3 * W_STEP,
-                     4 * line)
-        # Mistakes box
-        drawSentence(('Ошибок:', (mistakes, RED)), 26 * W_STEP, 4 * line)
-
-    def checkAnswer(self, answer):
-        if answer == self.answer:
-            return True
-        return
 
 
 class Pictures:
-    def __init__(self, text_only=False):
-        image_scale = (600, 400)
-        self.image_name, self.text, self.question, self.answer = self.picture_generation_from_db()
-        self.text_only = text_only
-        self.picture = load_image(self.image_name, image_scale)
-        self.rect = self.picture.get_rect(center=(WIDTH // 2, HEIGHT // 3))
-        self.input_text = ''
-
-    def drawQuestion(self):
-        win.blit(bg, (0, 0))
-        if self.text_only:
-            print_text(self.text, WIDTH // 2, 2 * line, center='yes')
-        else:
-            win.blit(self.picture, self.rect)
-        # Question box
-        print_text(self.question, WIDTH // 2, 3.5 * line, center='yes')
-        # Answer box
-        drawSentence(('Ответ:', (self.input_text, BLUE)), start - 3 * W_STEP,
-                     4 * line)
-        # Mistakes box
-        drawSentence(('Ошибок:', (mistakes, RED)), 26 * W_STEP, 4 * line)
-
-    def checkAnswer(self, answer):
-        return answer == self.answer
-
-    def picture_generation_from_db(self):
+    @staticmethod
+    def picture_generation_from_db():
         # Generating the picture related data
         pics_id, pic, text, question, answer = 0, '', '', '', ''
         cursor = db.cursor()
@@ -359,18 +310,48 @@ class Pictures:
                     'can\'t get data from database with pics_id {} and name{}'.format(
                         pics_id, pic))
                 continue
+        cursor.close()
         return pic, text, question, answer
+
+    def __init__(self, text_only=False):
+        __image_scale = (600, 400)
+        self.image_name, self.text, self.question, self.answer \
+            = self.picture_generation_from_db()
+        self.text_only = text_only
+        self.picture = load_image(self.image_name, __image_scale)
+        self.rect = self.picture.get_rect(center=(WIDTH // 2, HEIGHT // 3))
+        self.input_text = ''
+
+    def checkAnswer(self, answer):
+        return answer == self.answer
+
+    def drawCondition(self):
+        if self.text_only:
+            print_text(self.text, WIDTH // 2, 2 * LINE, center='yes')
+        else:
+            win.blit(self.picture, self.rect)
+
+    def drawQuestion(self):
+        print_text(self.question, WIDTH // 2, 3.5 * LINE, center='yes')
+
+    def drawWindow(self):
+        win.blit(bg, (0, 0))
+
+        drawSolvedBox()
+        drawMistakesBox()
+        drawAnswerBox(self.input_text)
+        self.drawCondition()
+        self.drawQuestion()
+
+        pygame.display.update()
 
 
 class Task:
-
     @staticmethod
-    def generate_question():
+    def generate_question_id():
         return random.randint(1, 15)
 
     def __init__(self, text_only=False, items_amount=2):
-#        self.question = self.generate_question()
-        #        self.question = 10
         self.heroes = random.sample(heroes, 2)
         self.count1, self.count2 = random.randint(1, 15), random.randint(1, 15)
         self.current_count = random.choice((self.count1, self.count2))
@@ -382,14 +363,14 @@ class Task:
         else:
             self.item_stuff1 = self.items[0]
             self.item_stuff2 = self.items[1]
-        self.text_only = text_only
+        self.text_only = True
         if self.text_only:
             self.hero1 = self.heroes[0].name
             self.hero2 = self.heroes[1].name
-            self.item1 = change(self.item_stuff1.name, self.count1)
-            self.item2 = change(self.item_stuff2.name, self.count2)
-            self.item_many1 = change(self.item_stuff1.name, 5)
-            self.item_many2 = change(self.item_stuff2.name, 5)
+            self.item1 = agree_noun_with_number(self.item_stuff1.name, self.count1)
+            self.item2 = agree_noun_with_number(self.item_stuff2.name, self.count2)
+            self.item_many1 = agree_noun_with_number(self.item_stuff1.name, 5)
+            self.item_many2 = agree_noun_with_number(self.item_stuff2.name, 5)
         else:
             self.hero1 = self.heroes[0].pic
             self.hero2 = self.heroes[1].pic
@@ -397,193 +378,174 @@ class Task:
             self.item2 = self.item_stuff2.pic
             self.item_many1 = self.item_stuff1.pic
             self.item_many2 = self.item_stuff2.pic
+        self.question, self.answer = self.generateQuestionAnswer()
 
         self.input_text = ''
         self.draw = True
 
     #        print(self.question, self.count1, self.count2, self.text_only)
-
     def drawCondition(self):
-
-        # Show task's condition
         drawSentence(
             ('У', self.hero1,
              verb_change('быть', self.item_stuff1.name, self.count1),
-             self.count1, self.item1, '.'), start,
-            line)
+             self.count1, self.item1, '.'), START,
+            LINE)
         drawSentence(
             ('А у', self.hero2,
              verb_change('быть', self.item_stuff2.name, self.count2),
              self.count2,
              self.item2, '.'),
-            start - W_STEP, 2 * line)
-        # Answer box
-        drawSentence(('Ответ:', (self.input_text, BLUE)), start - 3 * W_STEP,
-                     4 * line)
-        # Mistakes box
-        drawSentence(('Ошибок:', (mistakes, RED)), 26 * W_STEP, 4 * line)
+            START - W_STEP, 2 * LINE)
 
-    def drawQuestion(self, num):
-        if num == 1 and self.items_amount == 1:
-            drawSentence(
-                ('Сколько всего', self.item_many1, 'было ?'),
-                start // 2 - W_STEP, 3 * line
-            )
-        elif num == 1 and self.items_amount > 1:
-            drawSentence(
-                ('Сколько всего', self.item_many1, 'и', self.item_many2,
-                 'было ?'),
-                start // 2 - W_STEP, 3 * line
-            )
-        elif num == 2:
-            drawSentence(('Что больше', self.count1, 'или', self.count2, '?'),
-                         start, 3 * line)
-        elif num == 3 and self.items_amount == 1:
-            drawSentence(('У кого', self.item_many1, 'больше ?'), start,
-                         3 * line)
-        elif num == 4 and self.items_amount == 1:
-            drawSentence(('У кого', self.item_many1, 'меньше ?'), start,
-                         3 * line)
-        elif num == 5 and not self.text_only:
-            drawSentence(
-                ('Какого цвета', self.heroes[0].cover, 'у', self.hero1, '?'),
-                start - W_STEP, 3 * line)
-        elif num == 6:
-            drawSentence(
-                ('У кого', self.count1, self.item1, '?'), start,
-                3 * line)
-        elif num == 14:
-            drawSentence(
-                ('У кого', self.count2, self.item2, '?'), start,
-                3 * line)
-        elif num == 7:
-            drawSentence(('Что меньше', self.count1, 'или', self.count2, '?'),
-                         start, 3 * line)
-        elif num == 8:
-            drawSentence(('Сколько', self.item_many1, 'у', self.hero1, '?'),
-                         start, 3 * line)
-        elif num == 9:
-            drawSentence(('Сколько', self.item_many2, 'у', self.hero2, '?'),
-                         start, 3 * line)
-        elif num == 10 and self.items_amount == 1 and self.count1 != self.count2:
-            if self.count1 > self.count2:
-                drawSentence(('На сколько', self.item_many1, 'у', self.hero1,
-                              'было больше, чем у', self.hero2, '?'
-                              ),
-                             W_STEP * 3, 3 * line
-                             )
-            if self.count1 < self.count2:
-                drawSentence(('На сколько', self.item_many2, 'у', self.hero2,
-                              'было больше, чем у', self.hero1, '?'
-                              ),
-                             W_STEP * 3, 3 * line
-                             )
-        elif num == 11 and self.items_amount == 1 and self.count1 != self.count2:
-            if self.count1 < self.count2:
-                drawSentence(('На сколько', self.item_many1, 'у', self.hero1,
-                              'было меньше, чем у', self.hero2, '?'
-                              ),
-                             W_STEP * 3, 3 * line
-                             )
-            else:
-                drawSentence(('На сколько', self.item_many2, 'у', self.hero2,
-                              'было меньше, чем у', self.hero1, '?'
-                              ),
-                             W_STEP * 3, 3 * line
-                             )
-        elif num == 12 and self.items_amount > 1 and self.count1 != self.count2:
-            if self.count1 > self.count2:
-                drawSentence(('На сколько', self.item_many1,
-                              'было больше, чем',
-                              self.item_many2, '?'
-                              ),
-                             W_STEP * 3, 3 * line
-                             )
-            else:
-                drawSentence(('На сколько', self.item_many2,
-                              'было больше, чем', self.item_many1, '?'
-                              ),
-                             W_STEP * 3, 3 * line
-                             )
-        elif num == 13 and self.items_amount > 1 and self.count1 != self.count2:
-            if self.count1 < self.count2:
-                drawSentence(('На сколько', self.item_many1,
-                              'было меньше, чем', self.item_many2, '?'
-                              ),
-                             W_STEP * 3, 3 * line
-                             )
-            else:
-                drawSentence(('На сколько', self.item_many2,
-                              'было меньше, чем', self.item_many1, '?'
-                              ),
-                             W_STEP * 3, 3 * line
-                             )
-        else:
-            return
-        self.draw = False
+    def two_items_not_equal_amount(self):
+        return self.items_amount > 1 and self.count1 != self.count2
 
+    def one_item_not_equal_amount(self):
+        return self.items_amount == 1 and self.count1 != self.count2
 
-    # Check the answer in accordance with the task question
-    def checkAnswer(self, num, answer):
-        if num == 1:  # How much together?
-            return answer == str(self.count1 + self.count2)
-        if num == 2:  # Which number is greater?
-            return answer == str(
-                self.count1 if self.count1 >= self.count2 else self.count2)
-        if num == 3:  # Who has more?
-            if self.count1 > self.count2:
-                return answer == 'у ' + self.heroes[0].name
-            elif self.count1 == self.count2:
-                return answer == 'одинаково'
-            else:
-                return answer == 'у ' + self.heroes[1].name
-        if num == 4:  # Who has current_count of item?
-            if self.count1 < self.count2:
-                return answer == 'у ' + self.heroes[0].name
-            elif self.count1 == self.count2:
-                return answer == 'одинаково'
-            else:
-                return answer == 'у ' + self.heroes[1].name
-        if num == 5:  # Which color?
-            return answer == self.heroes[0].color
-        if num == 6:  # Who has? Hero[0]
-            if self.count1 == self.count2 and self.items_amount == 1:
-                return answer == 'одинаково'
-            else:
-                return answer == 'у ' + self.heroes[0].name
-        if num == 14:  # Who has? Hero[1]
-            if self.count1 == self.count2 and self.items_amount == 1:
-                return answer == 'одинаково'
-            else:
-                return answer == 'у ' + self.heroes[1].name
+    def generateQuestionAnswer(self):
+        question, answer = (), ''
+        while question == ():
+            num = self.generate_question_id()
+            if num == 1 and self.items_amount == 1:
+                question = (('Сколько всего', self.item_many1, 'было ?'),
+                            START // 2 - W_STEP, 3 * LINE)
+                answer = str(self.count1 + self.count2)
+            if num == 1 & self.two_items_not_equal_amount():
+                question = (('Сколько всего', self.item_many1, 'и',
+                             self.item_many2, 'было ?'), START // 2 - W_STEP,
+                            3 * LINE)
+                answer = str(self.count1 + self.count2)
+            if num == 2:
+                question = (
+                    ('Что больше', self.count1, 'или', self.count2, '?'), START,
+                    3 * LINE)
+                answer = str(
+                    self.count1 if self.count1 >= self.count2 else self.count2)
+            if num == 3 & self.one_item_not_equal_amount():
+                question = (
+                    ('У кого', self.item_many1, 'больше ?'), START, 3 * LINE)
+                answer = 'у ' + self.heroes[
+                    0].name if self.count1 > self.count2 else 'у ' + \
+                                                              self.heroes[
+                                                                  1].name
+            if num == 4 & self.one_item_not_equal_amount():
+                question = (('У кого', self.item_many1, 'меньше ?'), START,
+                            3 * LINE)
+                answer = 'у ' + self.heroes[
+                    0].name if self.count1 < self.count2 else 'у ' + \
+                                                              self.heroes[
+                                                                  1].name
+            if num == 5 and not self.text_only:
+                question = (
+                    ('Какого цвета', self.heroes[0].cover, 'у', self.hero1, '?'),
+                    START - W_STEP, 3 * LINE)
+                answer = self.heroes[0].color
+            if num == 6:
+                question = (
+                    ('У кого', self.count1, self.item1, '?'), START, 3 * LINE)
+                if self.count1 == self.count2 and self.items_amount == 1:
+                    answer = 'одинаково'
+                else:
+                    answer = 'у ' + self.heroes[0].name
+            if num == 7:
+                question = (
+                    ('У кого', self.count2, self.item2, '?'), START, 3 * LINE)
+                if self.count1 == self.count2 and self.items_amount == 1:
+                    answer = 'одинаково'
+                else:
+                    answer = 'у ' + self.heroes[1].name
+            if num == 8:
+                question = (
+                    ('Что меньше', self.count1, 'или', self.count2, '?'),
+                    START, 3 * LINE)
+                answer = str(
+                    self.count1 if self.count1 <= self.count2 else self.count2)
+            if num == 9:
+                question = (('Сколько', self.item_many1, 'у', self.hero1, '?'),
+                            START, 3 * LINE)
+                answer = str(self.count1)
+            if num == 10:
+                question = (('Сколько', self.item_many2, 'у', self.hero2, '?'),
+                            START, 3 * LINE)
+                answer = str(self.count2)
+            if num == 11 & self.one_item_not_equal_amount():
+                if self.count1 > self.count2:
+                    question = (
+                        ('На сколько', self.item_many1, 'у', self.hero1,
+                     'было больше, чем у', self.hero2, '?'
+                     ),
+                        3 * W_STEP, 3 * LINE
+                    )
+                else:
+                    question = (
+                        ('На сколько', self.item_many2, 'у', self.hero2,
+                     'было больше, чем у', self.hero1, '?'
+                     ),
+                        3 * W_STEP, 3 * LINE
+                    )
+                answer = 'на ' + str(abs(self.count1 - self.count2))
+            if num == 12 & self.one_item_not_equal_amount():
+                if self.count1 < self.count2:
+                    question = (
+                        ('На сколько', self.item_many1, 'у', self.hero1,
+                     'было меньше, чем у', self.hero2, '?'
+                     ),
+                        3 * W_STEP, 3 * LINE
+                    )
+                else:
+                    question = (
+                        ('На сколько', self.item_many2, 'у', self.hero2,
+                     'было меньше, чем у', self.hero1, '?'
+                     ),
+                        3 * W_STEP, 3 * LINE
+                    )
+                answer = 'на ' + str(abs(self.count1 - self.count2))
+            if num == 13 & self.two_items_not_equal_amount():
+                if self.count1 > self.count2:
+                    question = (('На сколько', self.item_many1,
+                                 'было больше, чем',
+                                 self.item_many2, '?'
+                                 ),
+                                3 * W_STEP, 3 * LINE
+                                )
+                else:
+                    question = (('На сколько', self.item_many2,
+                                 'было больше, чем', self.item_many1, '?'
+                                 ),
+                                3 * W_STEP, 3 * LINE
+                                )
+                answer = 'на ' + str(abs(self.count1 - self.count2))
+            if num == 14 & self.two_items_not_equal_amount():
+                if self.count1 < self.count2:
+                    question = (('На сколько', self.item_many1,
+                                 'было меньше, чем', self.item_many2, '?'
+                                 ),
+                                3 * W_STEP, 3 * LINE
+                                )
+                else:
+                    question = (('На сколько', self.item_many2,
+                                 'было меньше, чем', self.item_many1, '?'
+                                 ),
+                                3 * W_STEP, 3 * LINE
+                                )
+                answer = 'на ' + str(abs(self.count1 - self.count2))
+        return question, answer
 
-        if num == 7:  # Which number is lower?
-            return answer == str(
-                self.count1 if self.count1 <= self.count2 else self.count2)
-        if num == 8:  # How many items does hero1 have?
-            return answer == str(self.count1)
-        if num == 9:  # How many items does hero2 have?
-            return answer == str(self.count2)
-        if num == 10:  # How many more?
-            return answer == 'на ' + str(abs(self.count1 - self.count2))
-        if num == 11:  # How many less?
-            return answer == 'на ' + str(abs(self.count1 - self.count2))
-        if num == 12:  # How many more?
-            return answer == 'на ' + str(abs(self.count1 - self.count2))
-        if num == 13:  # How many less?
-            return answer == 'на ' + str(abs(self.count1 - self.count2))
+    def drawQuestion(self):
+        drawSentence(*self.question)
 
-        return
+    def checkAnswer(self, answer):
+        return answer == self.answer
 
     def drawWindow(self):
         win.blit(bg, (0, 0))
-        drawCount()
+
+        drawSolvedBox()
+        drawMistakesBox()
+        drawAnswerBox(self.input_text)
         self.drawCondition()
-        #        self.drawQuestion(3)
-        while self.draw:
-            self.question = self.generate_question()
-            self.drawQuestion(self.question)
-        self.drawQuestion(self.question)
+        self.drawQuestion()
 
         pygame.display.update()
 
@@ -596,12 +558,22 @@ class Task:
             pygame.draw.line(win, BLACK, (0, i * HEIGHT // j), (WIDTH, i * HEIGHT // j))
 '''
 
+# Buttons
+bt_pictures = load_image('button_pictures.png')
+bt_pictures_pressed = load_image('button_pictures_isOver.png')
+bt_tasks = load_image('button_tasks.png')
+bt_tasks_pressed = load_image('button_tasks_isOver.png')
 
-# The game menu
+
+
 def title_scene():
+    # The game menu
     clock.tick(FPS)
-    button_pictures = Button(WIDTH // 2, HEIGHT // 3, pictures)
-    button_tasks = Button(WIDTH // 2, HEIGHT // 3 - 100, bt_tasks)
+
+    button_pictures = Button(WIDTH // 2, HEIGHT // 3, bt_pictures,
+                             bt_pictures_pressed)
+    button_tasks = Button(WIDTH // 2, HEIGHT//3 - 100, bt_tasks,
+                          bt_tasks_pressed)
 
     run = True
     while run:
@@ -611,28 +583,26 @@ def title_scene():
                 pygame.quit()
                 exit()
             if event.type == pygame.MOUSEMOTION:
-                if button_pictures.isOver(pos):
-                    button_pictures.image = pictures_pressed
-                else:
-                    button_pictures.image = pictures
-                if button_tasks.isOver(pos):
-                    button_tasks.image = bt_tasks_pressed
-                else:
-                    button_tasks.image = bt_tasks
+                button_pictures.changeOnOver(pos)
+                button_tasks.changeOnOver(pos)
             if event.type == pygame.MOUSEBUTTONDOWN:
                 if button_pictures.isOver(pos):
                     pictures_scene()
+                    # Let's change the button color back to the original one
+                    # on return coz I like it
+                    button_pictures.image = button_pictures.original
                 if button_tasks.isOver(pos):
                     tasks_scene()
+                    button_tasks.image = button_tasks.original
 
         win.blit(bg, (0, 0))
-        button_pictures.draw_button()
-        button_tasks.draw_button()
+        button_pictures.drawButton()
+        button_tasks.drawButton()
         pygame.display.update()
 
 
-# The game for questions per picture
 def pictures_scene():
+    # The game for questions per picture
     run = True
 
     while run:
@@ -653,10 +623,7 @@ def pictures_scene():
                         return
                     # Left Ctrl to switch between text and pics mode
                     if event.key == pygame.K_LCTRL:
-                        if pics.text_only:
-                            pics.text_only = False
-                        else:
-                            pics.text_only = True
+                        pics.text_only = False if pics.text_only else True
                     # Processing TAB key for showing stats
                     if event.key == pygame.K_TAB:
                         tab_pressed = True
@@ -665,13 +632,14 @@ def pictures_scene():
                             for e in pygame.event.get():
                                 if e.type == pygame.KEYUP and e.key == pygame.K_TAB:
                                     tab_pressed = False
-                    # Checking the answer
+                    # Filling the answer once Enter is pressed
                     elif event.key == pygame.K_RETURN:
                         answer = pics.input_text
                         pics.input_text = ''
                     elif event.key == pygame.K_BACKSPACE:
                         pics.input_text = pics.input_text[:-1]
-                    elif len(pics.input_text) < 20:
+                    # Don't expect answer more than 20 symbols
+                    elif len(pics.input_text) <= 20:
                         pics.input_text += event.unicode
 
             # Next task or mistakes calculation
@@ -681,15 +649,14 @@ def pictures_scene():
                 if not completed:
                     mistakes += 1
 
-            pics.drawQuestion()
-            drawCount()
-            pygame.display.update()
+            pics.drawWindow()
         solved += 1
         congratulations()
 
 
-# The tasks game
+
 def tasks_scene():
+    # The tasks game
     run = True
 
     while run:
@@ -699,7 +666,8 @@ def tasks_scene():
         completed = False
         #    task = Task(True)
         items_amount = random.randint(1, 2)
-        task = random.choice((Task(True, items_amount), Task(items_amount)))
+        task = random.choice(
+            (Task(True, items_amount), Task(False, items_amount)))
         answer = ''
 
         while not completed:
@@ -711,11 +679,8 @@ def tasks_scene():
                     if event.key == pygame.K_ESCAPE:
                         return
                     # Left Ctrl to switch between text and pics mode
-                    if event.key == pygame.K_LCTRL:
-                        if task.text_only:
-                            task.text_only = False
-                        else:
-                            task.text_only = True
+                    #                    if event.key == pygame.K_LCTRL:
+                    #                        task.text_only = False if task.text_only else True
                     # Processing TAB key for showing stats
                     if event.key == pygame.K_TAB:
                         tab_pressed = True
@@ -725,22 +690,24 @@ def tasks_scene():
                                 if e.type == pygame.KEYUP and \
                                         e.key == pygame.K_TAB:
                                     tab_pressed = False
-                    # Checking the answer
+                    # Filling the answer once Enter is pressed
                     elif event.key == pygame.K_RETURN:
                         answer = task.input_text
                         task.input_text = ''
                     elif event.key == pygame.K_BACKSPACE:
                         task.input_text = task.input_text[:-1]
-                    elif len(task.input_text) < 20:
+                    # Don't expect answer more than 20 symbols
+                    elif len(task.input_text) <= 20:
                         task.input_text += event.unicode
+
             # Next task or mistakes calculation
             if answer != '':
-                completed = task.checkAnswer(task.question, answer)
+                completed = task.checkAnswer(answer)
                 answer = ''
                 if not completed:
                     mistakes += 1
+
             task.drawWindow()
-            pygame.display.update()
         solved += 1
         congratulations()
 
