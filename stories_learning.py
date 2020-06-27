@@ -243,11 +243,13 @@ def agree_noun_with_number(word: str, number: int, case='nomn') -> str:
     return morph.parse(word)[0].inflect({case}).make_agree_with_number(number)[
         0]
 
+
 def noun_declension(noun, case='nomn'):
     morph = pymorphy2.MorphAnalyzer()
     return morph.parse(noun)[0].inflect({case})[0]
 
-def verb_change(verb: str, noun: str = 'раз', num: int = 1) -> str:
+
+def verb_change(verb: str, noun: str, num: int = 1) -> str:
     # Past time for verb in accordance with a noun gender
     morph = pymorphy2.MorphAnalyzer()
     if num == 1:
@@ -550,6 +552,56 @@ class Task:
         pygame.display.update()
 
 
+class ActionTask(Task):
+    ACTIONS = ('присесть', 'подпрыгнуть', 'умыться', 'улыбнуться', 'зевнуть',
+               'поесть', 'подтянуться', 'прибраться', 'пробежать', 'попить')
+
+    @staticmethod
+    def generate_actions():
+        return random.sample(ActionTask.ACTIONS, 2)
+
+    def __init__(self, text_only=True, items_amount=2, action=True):
+        super().__init__(text_only, items_amount)
+        self.action_mode = action
+        self.action = self.generate_actions()
+        print(self.action)
+        if self.items_amount == 1:
+            self.action1 = self.action[0]
+            self.action2 = self.action[0]
+        else:
+            self.action1 = self.action[0]
+            self.action2 = self.action[1]
+        print(self.action1, self.action2)
+        if items_amount == 1:
+            self.hero1 = noun_declension(self.heroes[0].name)
+            self.hero2 = self.hero1
+        else:
+            self.hero1 = noun_declension(self.heroes[0].name)
+            self.hero2 = noun_declension(self.heroes[1].name)
+
+    def drawCondition(self):
+        drawSentence(
+            (self.hero1.capitalize(),
+             verb_change(self.action1, self.hero1), self.count1,
+             agree_noun_with_number('раз', self.count1), '.'), START, LINE)
+        drawSentence(
+            ('А ', self.hero2, verb_change(self.action2, self.hero2),
+             self.count2, agree_noun_with_number('раз', self.count2), '.'),
+            START - W_STEP, 2 * LINE)
+
+    def generateQuestionAnswer(self):
+        question, answer = (), ''
+        while question == ():
+#            num = self.generate_question_id()
+            num = random.randint(1, 1)
+            if num == 1:
+                question = (('Сколько всего раз', self.hero1,
+                             verb_change(self.action1, self.hero1)),
+                            START // 2 - W_STEP, 3 * LINE)
+                answer = str(self.count1)
+
+        return question, answer
+
 '''
         # draw net for position calculation:
         j = 40
@@ -666,8 +718,9 @@ def tasks_scene():
         completed = False
         #    task = Task(True)
         items_amount = random.randint(1, 2)
-        task = random.choice(
-            (Task(True, items_amount), Task(False, items_amount)))
+#        task = random.choice(
+#            (Task(True, items_amount), Task(False, items_amount)))
+        task = ActionTask()
         answer = ''
 
         while not completed:
