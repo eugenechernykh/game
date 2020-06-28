@@ -8,6 +8,7 @@ from sys import exit
 import MySQLdb
 import pygame
 import pymorphy2
+from pymorphy2.shapes import restore_capitalization
 from DBUtils.PooledDB import PooledDB
 from win32api import LoadKeyboardLayout
 
@@ -195,22 +196,55 @@ def print_text(
         else:
             win.blit(text, (x, y))
 
-    return text.get_width()
 
-
-def drawSentence(sentence: tuple, x: int, y: int) -> None:
+def drawSentence(sentence: tuple, x: int, y: int, center: str = 'yes') -> None:
     # Draw text and images as one line
+    x_position = 0
+    surface_list = []
+    font_type = pygame.font.SysFont('Comic Sans MS', 40)
+    max_height = 0
+
     for n in sentence:
         if isinstance(n, tuple):
             message, color = n
-            x += print_text(message, x, y,
-                            color) + W_STEP  # indent after drawing the text
+            colored_text_surf = font_type.render(str(message), True, color)
+            x_position += colored_text_surf.get_width() + W_STEP  # indent after drawing the text
+            surface_list.append(colored_text_surf)
+            if colored_text_surf.get_height() > max_height:
+                max_height = colored_text_surf.get_height()
         elif isinstance(n, pygame.Surface):
-            surf = win.blit(n, (
-                x, y - n.get_height() // 3))  # centering the surface in line
-            x += surf.width + W_STEP  # indent after drawing the surface
+#            surf = win.blit(n, (
+#                x, y - n.get_height() // 3))  # centering the surface in line
+            x_position += n.get_width() + W_STEP  # indent after drawing the surface
+            surface_list.append(n)
+            if n.get_height() > max_height:
+                max_height = n.get_height()
         else:
-            x += print_text(n, x, y) + W_STEP  # indent after drawing the text
+            text_surf = font_type.render(str(n), True, WHITE)
+            x_position += text_surf.get_width() + W_STEP  # indent after drawing the text
+            surface_list.append(text_surf)
+            if text_surf.get_height() > max_height:
+                max_height = text_surf.get_height()
+
+    united_surface = pygame.Surface((x_position - W_STEP, max_height), pygame.SRCALPHA)
+    current_x = 0
+
+    for surf in surface_list:
+        united_surface.blit(surf, (current_x, 0))
+        current_x += surf.get_width() + W_STEP
+
+    if center == 'no':
+        win.blit(united_surface, (x, y))
+    if center == 'yes':
+        win.blit(united_surface, ((WIDTH - united_surface.get_width())//2, y))
+    if center == '1half':
+        win.blit(united_surface, ((WIDTH - 2*united_surface.get_width())//4, y))
+    if center == '2half':
+        win.blit(united_surface, ((3*WIDTH - united_surface.get_width())//4, y))
+
+
+
+
 
 
 def drawSolvedBox():
@@ -220,7 +254,7 @@ def drawSolvedBox():
 
 
 def drawMistakesBox():
-    drawSentence(('Ошибок:', (mistakes, RED)), 26 * W_STEP, 4 * LINE)
+    drawSentence(('Ошибок:', (mistakes, RED)), 26 * W_STEP, 4 * LINE, center='2half')
 
 
 def drawStatistics():
@@ -228,13 +262,13 @@ def drawStatistics():
     drawSentence(('Успешность:',
                   '0' if mistakes == 0 and solved == 0 else 100 * solved // (
                           solved + mistakes), '%'),
-                 26 * W_STEP, HEIGHT - 4*H_STEP)
+                 26 * W_STEP, HEIGHT - 4*H_STEP, center='no')
     pygame.display.update()
 
 
 def drawAnswerBox(input_text):
     drawSentence(('Ответ:', (input_text, BLUE)), START - 3*W_STEP,
-                 4 * LINE)
+                 4 * LINE, center='no')
 
 
 def agree_noun_with_number(word: str, number: int, case='nomn') -> str:
@@ -246,17 +280,21 @@ def agree_noun_with_number(word: str, number: int, case='nomn') -> str:
 
 def noun_declension(noun, case='nomn'):
     morph = pymorphy2.MorphAnalyzer()
-    return morph.parse(noun)[0].inflect({case})[0]
+    return restore_capitalization( morph.parse(noun)[0].inflect({case})[0], noun)
 
 
-def verb_change(verb: str, noun: str, num: int = 1) -> str:
-    # Past time for verb in accordance with a noun gender
+def verb_change(verb: str, noun: str = 'он', count: int = 1, plural: bool = False) -> str:
+    # Past time for verb in accordance with a noun gender or plural
     morph = pymorphy2.MorphAnalyzer()
-    if num == 1:
+    if plural:
+        return morph.parse(verb)[0].inflect({'past', 'plur'})[0]
+    if count == 1:
         return morph.parse(verb)[0].inflect(
             {'past', morph.parse(noun)[0].tag.gender})[0]
-    if num > 1:
+    if count > 1:
         return morph.parse(verb)[0].inflect({'past', 'neut'})[0]
+
+
 
 
 def congratulations():
@@ -365,7 +403,8 @@ class Task:
         else:
             self.item_stuff1 = self.items[0]
             self.item_stuff2 = self.items[1]
-        self.text_only = True
+#        self.text_only = True
+        self.text_only = text_only
         if self.text_only:
             self.hero1 = self.heroes[0].name
             self.hero2 = self.heroes[1].name
@@ -386,18 +425,23 @@ class Task:
         self.draw = True
 
     #        print(self.question, self.count1, self.count2, self.text_only)
-    def drawCondition(self):
-        drawSentence(
+    def generateCondition(self):
+        condition_line1 = (
             ('У', self.hero1,
              verb_change('быть', self.item_stuff1.name, self.count1),
              self.count1, self.item1, '.'), START,
             LINE)
-        drawSentence(
+        condition_line2 = (
             ('А у', self.hero2,
              verb_change('быть', self.item_stuff2.name, self.count2),
              self.count2,
              self.item2, '.'),
             START - W_STEP, 2 * LINE)
+        return condition_line1, condition_line2
+
+    def drawCondition(self, args):
+        for arg in args:
+            drawSentence(*arg)
 
     def two_items_not_equal_amount(self):
         return self.items_amount > 1 and self.count1 != self.count2
@@ -413,7 +457,7 @@ class Task:
                 question = (('Сколько всего', self.item_many1, 'было ?'),
                             START // 2 - W_STEP, 3 * LINE)
                 answer = str(self.count1 + self.count2)
-            if num == 1 & self.two_items_not_equal_amount():
+            if num == 1 and self.two_items_not_equal_amount():
                 question = (('Сколько всего', self.item_many1, 'и',
                              self.item_many2, 'было ?'), START // 2 - W_STEP,
                             3 * LINE)
@@ -424,14 +468,14 @@ class Task:
                     3 * LINE)
                 answer = str(
                     self.count1 if self.count1 >= self.count2 else self.count2)
-            if num == 3 & self.one_item_not_equal_amount():
+            if num == 3 and self.one_item_not_equal_amount():
                 question = (
                     ('У кого', self.item_many1, 'больше ?'), START, 3 * LINE)
                 answer = 'у ' + self.heroes[
                     0].name if self.count1 > self.count2 else 'у ' + \
                                                               self.heroes[
                                                                   1].name
-            if num == 4 & self.one_item_not_equal_amount():
+            if num == 4 and self.one_item_not_equal_amount():
                 question = (('У кого', self.item_many1, 'меньше ?'), START,
                             3 * LINE)
                 answer = 'у ' + self.heroes[
@@ -471,7 +515,7 @@ class Task:
                 question = (('Сколько', self.item_many2, 'у', self.hero2, '?'),
                             START, 3 * LINE)
                 answer = str(self.count2)
-            if num == 11 & self.one_item_not_equal_amount():
+            if num == 11 and self.one_item_not_equal_amount():
                 if self.count1 > self.count2:
                     question = (
                         ('На сколько', self.item_many1, 'у', self.hero1,
@@ -487,7 +531,7 @@ class Task:
                         3 * W_STEP, 3 * LINE
                     )
                 answer = 'на ' + str(abs(self.count1 - self.count2))
-            if num == 12 & self.one_item_not_equal_amount():
+            if num == 12 and self.one_item_not_equal_amount():
                 if self.count1 < self.count2:
                     question = (
                         ('На сколько', self.item_many1, 'у', self.hero1,
@@ -503,7 +547,7 @@ class Task:
                         3 * W_STEP, 3 * LINE
                     )
                 answer = 'на ' + str(abs(self.count1 - self.count2))
-            if num == 13 & self.two_items_not_equal_amount():
+            if num == 13 and self.two_items_not_equal_amount():
                 if self.count1 > self.count2:
                     question = (('На сколько', self.item_many1,
                                  'было больше, чем',
@@ -518,7 +562,7 @@ class Task:
                                 3 * W_STEP, 3 * LINE
                                 )
                 answer = 'на ' + str(abs(self.count1 - self.count2))
-            if num == 14 & self.two_items_not_equal_amount():
+            if num == 14 and self.two_items_not_equal_amount():
                 if self.count1 < self.count2:
                     question = (('На сколько', self.item_many1,
                                  'было меньше, чем', self.item_many2, '?'
@@ -546,7 +590,7 @@ class Task:
         drawSolvedBox()
         drawMistakesBox()
         drawAnswerBox(self.input_text)
-        self.drawCondition()
+        self.drawCondition(self.generateCondition())
         self.drawQuestion()
 
         pygame.display.update()
@@ -554,16 +598,18 @@ class Task:
 
 class ActionTask(Task):
     ACTIONS = ('присесть', 'подпрыгнуть', 'умыться', 'улыбнуться', 'зевнуть',
-               'поесть', 'подтянуться', 'прибраться', 'пробежать', 'попить')
+               'поесть', 'подтянуться', 'прибраться', 'пробежать', 'попить',
+               'поплакать', 'кричать', 'посмеяться', 'погулять', 'постучать'
+               )
 
     @staticmethod
     def generate_actions():
         return random.sample(ActionTask.ACTIONS, 2)
 
     def __init__(self, text_only=True, items_amount=2, action=True):
-        super().__init__(text_only, items_amount)
         self.action_mode = action
         self.action = self.generate_actions()
+        self.items_amount = items_amount
         print(self.action)
         if self.items_amount == 1:
             self.action1 = self.action[0]
@@ -572,35 +618,78 @@ class ActionTask(Task):
             self.action1 = self.action[0]
             self.action2 = self.action[1]
         print(self.action1, self.action2)
-        if items_amount == 1:
+        super().__init__(text_only, items_amount)
+        self.heroes = random.sample(heroes, 2)
+        if self.items_amount == 1:
             self.hero1 = noun_declension(self.heroes[0].name)
             self.hero2 = self.hero1
         else:
             self.hero1 = noun_declension(self.heroes[0].name)
             self.hero2 = noun_declension(self.heroes[1].name)
+        print(self.hero1, self.hero2)
+        self.question, self.answer = self.generateQuestionAnswer()
 
-    def drawCondition(self):
-        drawSentence(
-            (self.hero1.capitalize(),
-             verb_change(self.action1, self.hero1), self.count1,
-             agree_noun_with_number('раз', self.count1), '.'), START, LINE)
-        drawSentence(
-            ('А ', self.hero2, verb_change(self.action2, self.hero2),
-             self.count2, agree_noun_with_number('раз', self.count2), '.'),
-            START - W_STEP, 2 * LINE)
+    def generateCondition(self):
+        if self.hero1 != self.hero2:
+            condition_line1 = (' '.join(('Однажды', self.hero1, verb_change(self.action1, self.hero1), str(self.count1), agree_noun_with_number('раз', self.count1) + '.')), WIDTH // 2, LINE)
+            condition_line2 = (' '.join(('А', self.hero2, verb_change(self.action2, self.hero2), str(self.count2), agree_noun_with_number('раз', self.count2) + '.')), WIDTH // 2, 2 * LINE)
+        else:
+            condition_line1 = (' '.join(('Сначала', self.hero1, verb_change(self.action1, self.hero1), str(self.count1), agree_noun_with_number('раз', self.count1) + '.')), WIDTH // 2, LINE)
+            condition_line2 = (' '.join(('Потом', self.hero2, verb_change(self.action2, self.hero2), str(self.count2), agree_noun_with_number('раз', self.count2) + '.')), WIDTH // 2, 2 * LINE)
+        return condition_line1, condition_line2
+
+    def drawCondition(self, args):
+        for arg in args:
+            print_text(*arg, center='yes')
+
+    def drawQuestion(self):
+        print_text(*self.question, center='yes')
+
+    def same_action_different_hero_count(self):
+        return self.action1 == self.action2 and self.hero1 != self.hero2 and self.count1 != self.count2
 
     def generateQuestionAnswer(self):
         question, answer = (), ''
         while question == ():
 #            num = self.generate_question_id()
-            num = random.randint(1, 1)
-            if num == 1:
-                question = (('Сколько всего раз', self.hero1,
-                             verb_change(self.action1, self.hero1)),
-                            START // 2 - W_STEP, 3 * LINE)
-                answer = str(self.count1)
+            num = random.randint(1, 7)
+#            num = 7
+#            self.action1 = self.action2
 
+            if num == 1:
+                message = ' '.join(('Сколько всего раз', self.hero1,
+                             verb_change(self.action1, self.hero1) + '?'))
+                question = (message, WIDTH//2, 3 * LINE)
+                if self.hero1 == self.hero2 and self.action1 == self.action2:
+                    answer = str(self.count1 + self.count2)
+                else:
+                    answer = str(self.count1)
+            if num == 2 and self.same_action_different_hero_count():
+                message = ' '.join(('Кто больше раз', verb_change(self.action1), '?'))
+                question = (message, WIDTH//2, 3 * LINE)
+                answer = self.hero1 if self.count1 > self.count2 else self.hero2
+            if num == 3 and self.action1 != self.action2:
+                message = ' '.join(('Кто', verb_change(self.action1) + '?'))
+                question = (message, WIDTH // 2, 3 * LINE)
+                answer = self.hero1
+            if num == 4 and self.action1 != self.action2:
+                message = ' '.join(('Кто', verb_change(self.action2) + '?'))
+                question = (message, WIDTH // 2, 3 * LINE)
+                answer = self.hero2
+            if num == 5 and self.action1 == self.action2 and self.hero1 != self.hero2:
+                message = ' '.join(('Сколько всего раз', self.hero1, 'и', self.hero2, verb_change(self.action1, plural=True) + '?'))
+                question = (message, WIDTH // 2, 3 * LINE)
+                answer = str(self.count1 + self.count2)
+            if num == 6 and self.same_action_different_hero_count():
+                message = ' '.join(('Кто', verb_change(self.action1),  str(self.count1), 'раз?'))
+                question = (message, WIDTH // 2, 3 * LINE)
+                answer = self.hero1
+            if num == 7 and self.same_action_different_hero_count():
+                message = ' '.join(('Кто', verb_change(self.action2),  str(self.count2), 'раз?'))
+                question = (message, WIDTH // 2, 3 * LINE)
+                answer = self.hero2
         return question, answer
+
 
 '''
         # draw net for position calculation:
@@ -718,9 +807,9 @@ def tasks_scene():
         completed = False
         #    task = Task(True)
         items_amount = random.randint(1, 2)
-#        task = random.choice(
-#            (Task(True, items_amount), Task(False, items_amount)))
-        task = ActionTask()
+        task = random.choice(
+            (Task(True, items_amount), Task(False, items_amount), ActionTask()))
+#        task = ActionTask()
         answer = ''
 
         while not completed:
