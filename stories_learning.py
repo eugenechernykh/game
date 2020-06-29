@@ -169,82 +169,89 @@ def load_files(text_file_name, scale):
 bg = load_image('board1.jpg', (WIDTH, HEIGHT))
 
 
-def print_text(
-        message, x, y, font_color=WHITE, font_type='Comic Sans MS',
-        font_size=40, center='no'):
+def render_message(message, font_color=WHITE, font_type='Comic Sans MS', font_size=40):
     if isinstance(message, int):
         message = str(message)  # converting number to string
     font_type = pygame.font.SysFont(font_type, font_size)
-    # splitting several sentences is required for picture descriptions
+    text = font_type.render(message, True, font_color)
+    return text
+
+
+def split_message(message):
     if message.count('.') > 1:
-        splitted_message = message.split('.')
-        splitted_message.pop()  # removing the last empty element in the list
-        for i in range(len(splitted_message)):
-            text = font_type.render(splitted_message[i] + '.', True,
-                                    font_color)
-            if center == 'yes':
-                text_rect = text.get_rect(center=(x, y + i*50))
-                win.blit(text, text_rect)
-            else:
-                win.blit(text, (x, y + i*50))
-        return
-    else:
-        text = font_type.render(message, True, font_color)
+        split_message_list = message.split('. ')
+        output = tuple(map(lambda x: x + '.' if x[-1] != '.' else x,
+                           split_message_list
+                           )
+                       )
+        return output
+    return (message,)
+
+
+def print_text(
+        message, x, y, font_color=WHITE, font_type='Comic Sans MS',
+        font_size=40, center='no'):
+    # splitting of several sentences is required for picture descriptions
+    for sentence in split_message(message):
+        text = render_message(sentence, font_color, font_type, font_size)
         if center == 'yes':
             text_rect = text.get_rect(center=(x, y))
             win.blit(text, text_rect)
+            y += 50
         else:
             win.blit(text, (x, y))
+            y += 50
+    return
 
 
-def drawSentence(sentence: tuple, x: int, y: int, center: str = 'yes') -> None:
-    # Draw text and images as one line
+def merge_in_one_surface(sentence: tuple) -> pygame.Surface:
     x_position = 0
     surface_list = []
-    font_type = pygame.font.SysFont('Comic Sans MS', 40)
     max_height = 0
 
-    for n in sentence:
-        if isinstance(n, tuple):
-            message, color = n
-            colored_text_surf = font_type.render(str(message), True, color)
-            x_position += colored_text_surf.get_width() + W_STEP  # indent after drawing the text
+    for item in sentence:
+        if isinstance(item, tuple):
+            message, color = item
+            colored_text_surf = render_message(message, color)
+            x_position += colored_text_surf.get_width() + W_STEP  # indent after text
             surface_list.append(colored_text_surf)
             if colored_text_surf.get_height() > max_height:
                 max_height = colored_text_surf.get_height()
-        elif isinstance(n, pygame.Surface):
-#            surf = win.blit(n, (
-#                x, y - n.get_height() // 3))  # centering the surface in line
-            x_position += n.get_width() + W_STEP  # indent after drawing the surface
-            surface_list.append(n)
-            if n.get_height() > max_height:
-                max_height = n.get_height()
+        elif isinstance(item, pygame.Surface):
+            #            surf = win.blit(n, (
+            #                x, y - n.get_height() // 3))  # centering the surface in line
+            x_position += item.get_width() + W_STEP  # indent after text
+            surface_list.append(item)
+            if item.get_height() > max_height:
+                max_height = item.get_height()
         else:
-            text_surf = font_type.render(str(n), True, WHITE)
-            x_position += text_surf.get_width() + W_STEP  # indent after drawing the text
+            text_surf = render_message(item)
+            x_position += text_surf.get_width() + W_STEP  # indent after text
             surface_list.append(text_surf)
             if text_surf.get_height() > max_height:
                 max_height = text_surf.get_height()
-
     united_surface = pygame.Surface((x_position - W_STEP, max_height), pygame.SRCALPHA)
-    current_x = 0
 
+    current_x = 0
     for surf in surface_list:
         united_surface.blit(surf, (current_x, 0))
         current_x += surf.get_width() + W_STEP
 
+    return united_surface
+
+
+def drawSentence(sentence: tuple, x: int, y: int, center: str = 'yes') -> None:
+    # Draw text and images as one line
+    my_surface = merge_in_one_surface(sentence)
+
     if center == 'no':
-        win.blit(united_surface, (x, y))
+        win.blit(my_surface, (x, y))
     if center == 'yes':
-        win.blit(united_surface, ((WIDTH - united_surface.get_width())//2, y))
+        win.blit(my_surface, ((WIDTH - my_surface.get_width())//2, y))
     if center == '1half':
-        win.blit(united_surface, ((WIDTH - 2*united_surface.get_width())//4, y))
+        win.blit(my_surface, ((WIDTH - 2*my_surface.get_width())//4, y))
     if center == '2half':
-        win.blit(united_surface, ((3*WIDTH - united_surface.get_width())//4, y))
-
-
-
-
+        win.blit(my_surface, ((3*WIDTH - my_surface.get_width())//4, y))
 
 
 def drawSolvedBox():
@@ -284,7 +291,7 @@ def noun_declension(noun, case='nomn'):
 
 
 def verb_change(verb: str, noun: str = 'он', count: int = 1, plural: bool = False) -> str:
-    # Past time for verb in accordance with a noun gender or plural
+    # Past time for verb in accordance with a noun gender, amount or plural
     morph = pymorphy2.MorphAnalyzer()
     if plural:
         return morph.parse(verb)[0].inflect({'past', 'plur'})[0]
@@ -293,8 +300,6 @@ def verb_change(verb: str, noun: str = 'он', count: int = 1, plural: bool = Fa
             {'past', morph.parse(noun)[0].tag.gender})[0]
     if count > 1:
         return morph.parse(verb)[0].inflect({'past', 'neut'})[0]
-
-
 
 
 def congratulations():
